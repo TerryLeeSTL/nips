@@ -1,0 +1,358 @@
+ ## Music Upload Event (₿Muse)
+ *Decentralized Music Distribution with Payment Integration*
+
+ **Status**: Draft  
+ **Authors**: Terry Lee (npub1d8fsx2su2a2avadlaw8zc75cez0d8k9yy5x3n4ttgs7rcwt7myasspg9lg)  
+ **Created**: 2025-05-10  
+
+ ---
+
+ ## Abstract
+ This NIP defines a Nostr event format (`kind: 1001`) for artists to distribute music in a decentralized, censorship-resistant manner, branded as **₿Muse**. The event includes metadata (title, artist, license), a URL to an audio file (e.g., hosted on [nostr.build](https://nostr.build/) or IPFS), and optional payment mechanisms via Bitcoin (on-chain) and Lightning Network (LNURL). Artists maintain ownership through cryptographic signatures, and the format supports interoperability with Nostr clients and music platforms like [Wavlake](https://wavlake.com/).
+
+ ---
+
+ ## Motivation
+ Centralized music platforms impose high fees, restrict artist control, and risk censorship. **₿Muse** enables:
+ - **Decentralized Distribution**: Artists publish music to Nostr relays, ensuring global access without intermediaries.
+ - **Ownership**: Cryptographic signatures and license tags prove authorship and define usage rights.
+ - **Payments**: Direct tipping or paywalls via Bitcoin and Lightning, bypassing traditional processors.
+ - **Interoperability**: Standardized metadata aligns with platforms like [Wavlake](https://wavlake.com/) for cross-client compatibility.
+ - **Media Hosting**: Integration with [nostr.build](https://nostr.build/) and decentralized storage (IPFS, Arweave) for scalability.
+
+ **₿Muse** empowers artists with control over their music and revenue while fostering a vibrant Nostr music ecosystem. Unlike [NIP-99 (Classified Listings)](https://github.com/nostr-protocol/nips/blob/master/99.md), which focuses on marketplace transactions, **₿Muse** is tailored specifically for music distribution and artist monetization.
+
+ ---
+
+ ## Specification
+
+ ### Event Structure
+ A `kind: 1001` event represents a music upload in the **₿Muse** framework:
+
+ ```json
+ {
+   "kind": 1001,
+   "pubkey": "<32-byte hex public key>",
+   "created_at": <unix timestamp (seconds)>,
+   "tags": [
+     ["title", "<song title>"],
+     ["artist", "<artist name>"],
+     ["album", "<album name (optional)>"],
+     ["genre", "<genre (optional)>"],
+     ["file", "<audio file URL>"],
+     ["cover", "<cover art URL (optional)>"],
+     ["license", "<license type>"],
+     ["lightning", "<LNURL (optional)>"],
+     ["bitcoin", "<Bitcoin address (optional)>"],
+     ["price", "<price in satoshis (optional)>"],
+     ["client", "BMuse"]
+   ],
+   "content": "<optional artist message>",
+   "id": "<32-byte hex event ID>",
+   "sig": "<64-byte hex Schnorr signature>"
+ }
+ ```
+
+ ### Tags
+ | Tag         | Type     | Description                                                                 |
+ |-------------|----------|-----------------------------------------------------------------------------|
+ | `title`     | String   | **Required**. Song title.                                                   |
+ | `artist`    | String   | **Required**. Artist name or pseudonym.                                     |
+ | `album`     | String   | Optional. Album name.                                                       |
+ | `genre`     | String   | Optional. Music genre (e.g., Rock, Jazz).                                   |
+ | `file`      | String   | **Required**. URL to audio file (e.g., [nostr.build](https://nostr.build/)). |
+ | `cover`     | String   | Optional. URL to cover art.                                                 |
+ | `license`   | String   | **Required**. License type (e.g., `CC-BY-SA`, `All Rights Reserved`). Advisory; does not replace legal agreements. |
+ | `lightning` | String   | Optional. LNURL per [NIP-21](https://github.com/nostr-protocol/nips/blob/master/21.md). |
+ | `bitcoin`   | String   | Optional. Bitcoin address per [BIP-173](https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki). |
+ | `price`     | Integer  | Optional. Price in satoshis (e.g., `500` = 500 satoshis, not BTC) for paywall access to `file`. |
+ | `client`    | String   | Optional. Client identifier, set to `BMuse` for **₿Muse** implementations.  |
+
+ ### Content
+ The `content` field is optional and may include:
+ - Promotional messages (e.g., “New release!”).
+ - Paywall instructions (e.g., “Pay 500 sats to listen.”).
+ - Song or artist details.
+
+ ### Payment Mechanisms
+ #### Free Content
+ - No `price` tag: `file` URL is publicly accessible.
+ - `lightning` and `bitcoin` tags may solicit tips/donations.
+ - Clients ignoring payment tags treat content as free, ensuring backward compatibility per [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md).
+
+ #### Paywalled Content
+ - `price` tag (e.g., `["price", "500"]`): Clients MUST:
+   - Display price in satoshis (optionally fiat equivalents via exchange rates).
+   - Prompt payment via:
+     - **Lightning**: `lightning` tag’s LNURL (preferred).
+     - **Bitcoin**: `bitcoin` tag’s address (manual TXID verification).
+   - Block `file` access until payment is confirmed.
+ - Verification:
+   - **Lightning**: Confirm via LNURL response per [NIP-21](https://github.com/nostr-protocol/nips/blob/master/21.md).
+   - **Bitcoin**: Verify TXID via block explorer (e.g., [Mempool.space](https://mempool.space/)).
+   - Implement rate-limiting (e.g., 10 requests/minute) to prevent abuse of verification endpoints.
+
+ #### LNURL Usage
+ - `lightning` tag MUST contain a valid LNURL.
+ - Tips: LNURL-withdraw or LNURL-pay with no minimum.
+ - Paywalls: LNURL-pay with amount matching `price`.
+
+ #### Bitcoin Address Usage
+ - `bitcoin` tag MUST follow [BIP-173](https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki).
+ - Clients SHOULD validate address format.
+ - Verification requires user-provided TXID.
+
+ ### Ownership and Licensing
+ - **Ownership**: `pubkey` and `sig` prove authorship; `created_at` timestamps publication.
+ - **Licensing**: `license` tag specifies usage rights (e.g., `CC-BY-SA`, `All Rights Reserved`). Clients SHOULD display `license` to inform users. The tag is advisory and does not replace legal agreements; Creative Commons licenses (e.g., CC-BY-SA) are recommended for clarity.
+ - **Sensitive Metadata**: For paywalled content, sensitive metadata (e.g., detailed `license` terms) MAY be encrypted per [NIP-04](https://github.com/nostr-protocol/nips/blob/master/04.md).
+
+ ### Media Hosting
+ - `file` and `cover` URLs MUST be HTTP/HTTPS-accessible.
+ - Recommended hosts:
+   - [nostr.build](https://nostr.build/) (requires API key or manual upload; metadata removal supported).
+   - IPFS (`https://ipfs.io/ipfs/<CID>`).
+   - Arweave for permanence.
+ - Clients MAY cache media, respecting `license`.
+
+ ---
+
+ ## Examples
+
+ ### Free Song with Tips
+ ```json
+ {
+   "kind": 1001,
+   "pubkey": "53a6e8f1b8b53f7d92e4a8b9f1a4b6f8c6e4b8f9a4b6f8c6e4b8f9a4b6f8c6e",
+   "created_at": 1739318400,
+   "tags": [
+     ["title", "Summer Nights"],
+     ["artist", "The Waves"],
+     ["album", "Debut Album"],
+     ["genre", "Rock"],
+     ["file", "https://nostr.build/audio/summer_nights.mp3"],
+     ["cover", "https://nostr.build/image/summer_nights.jpg"],
+     ["license", "CC-BY-SA"],
+     ["lightning", "lnurl1dp68gurn8ghj7..."],
+     ["bitcoin", "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"],
+     ["client", "BMuse"]
+   ],
+   "content": "New song released! Zap me to support!",
+   "id": "<computed>",
+   "sig": "<signature>"
+ }
+ ```
+
+ ### Paywalled Song
+ ```json
+ {
+   "kind": 1001,
+   "pubkey": "53a6e8f1b8b53f7d92e4a8b9f1a4b6f8c6e4b8f9a4b6f8c6e4b8f9a4b6f8c6e",
+   "created_at": 1739318400,
+   "tags": [
+     ["title", "Moonlit Dreams"],
+     ["artist", "The Waves"],
+     ["file", "https://nostr.build/audio/moonlit_dreams.mp3"],
+     ["license", "All Rights Reserved"],
+     ["lightning", "lnurl1dp68gurn8ghj7..."],
+     ["bitcoin", "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"],
+     ["price", "500"],
+     ["client", "BMuse"]
+   ],
+   "content": "Pay 500 sats to listen to my new track!",
+   "id": "<computed>",
+   "sig": "<signature>"
+ }
+ ```
+
+ ---
+
+ ## Testing and Validation
+ To ensure robust implementation, clients and relays should validate **₿Muse** events using the following:
+
+ ### Test Vectors
+ - **Valid Free Event**:
+   ```json
+   {
+     "kind": 1001,
+     "pubkey": "53a6e8f1b8b53f7d92e4a8b9f1a4b6f8c6e4b8f9a4b6f8c6e4b8f9a4b6f8c6e",
+     "created_at": 1739318400,
+     "tags": [
+       ["title", "Test Song"],
+       ["artist", "Test Artist"],
+       ["file", "https://nostr.build/audio/test.mp3"],
+       ["license", "CC-BY-SA"],
+       ["client", "BMuse"]
+     ],
+     "content": "Free test song!",
+     "id": "<computed>",
+     "sig": "<signature>"
+   }
+   ```
+   - **Expected Behavior**: Clients display metadata and stream `file` URL without payment.
+
+ - **Valid Paywalled Event**:
+   ```json
+   {
+     "kind": 1001,
+     "pubkey": "53a6e8f1b8b53f7d92e4a8b9f1a4b6f8c6e4b8f9a4b6f8c6e4b8f9a4b6f8c6e",
+     "created_at": 1739318400,
+     "tags": [
+       ["title", "Premium Song"],
+       ["artist", "Test Artist"],
+       ["file", "https://nostr.build/audio/premium.mp3"],
+       ["license", "All Rights Reserved"],
+       ["lightning", "lnurl1dp68gurn8ghj7..."],
+       ["price", "1000"],
+       ["client", "BMuse"]
+     ],
+     "content": "Pay 1000 sats to listen!",
+     "id": "<computed>",
+     "sig": "<signature>"
+   }
+   ```
+   - **Expected Behavior**: Clients prompt for 1000 satoshis payment via LNURL before granting `file` access.
+
+ - **Invalid Event (Missing Required Tag)**:
+   ```json
+   {
+     "kind": 1001,
+     "pubkey": "53a6e8f1b8b53f7d92e4a8b9f1a4b6f8c6e4b8f9a4b6f8c6e4b8f9a4b6f8c6e",
+     "created_at": 1739318400,
+     "tags": [
+       ["artist", "Test Artist"],
+       ["file", "https://nostr.build/audio/invalid.mp3"],
+       ["license", "CC-BY-SA"]
+     ],
+     "content": "Missing title!",
+     "id": "<computed>",
+     "sig": "<signature>"
+   }
+   ```
+   - **Expected Behavior**: Clients reject the event due to missing `title` tag.
+
+ ### Testing Checklist
+ - **Event Validation**:
+   - Confirm required tags (`title`, `artist`, `file`, `license`) are present.
+   - Validate `lightning` tag as a valid LNURL per [NIP-21](https://github.com/nostr-protocol/nips/blob/master/21.md).
+   - Validate `bitcoin` tag as a BIP-173 address.
+   - Verify `price` is a positive integer (in satoshis).
+ - **Payment Verification**:
+   - Test Lightning payments with mock LNURL responses.
+   - Test Bitcoin payments with mock TXIDs via [Mempool.space](https://mempool.space/) API.
+   - Ensure rate-limiting (e.g., 10 requests/minute) on verification endpoints.
+ - **Media Access**:
+   - Stream free content without payment.
+   - Block paywalled content until payment is confirmed.
+ - **Client Rendering**:
+   - Display metadata and license in clients like [Damus](https://damus.io/) or [Primal](https://primal.net/).
+   - Test fallback to `content` as a text note for non-supporting clients.
+
+ ---
+
+ ## Implementation Guidelines
+
+ ### Client Responsibilities
+ - **Display**: Show metadata, license, and payment options.
+ - **Media Access**:
+   - Free: Stream/download `file` URL.
+   - Paywalled: Verify payment before access.
+ - **Payment UI**:
+   - Show `price` in satoshis and fiat (via exchange rates).
+   - Offer Lightning and Bitcoin options.
+ - **Validation**:
+   - LNURLs per [NIP-21](https://github.com/nostr-protocol/nips/blob/master/21.md).
+   - Bitcoin addresses per [BIP-173](https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki).
+   - Signatures via [nostr-tools](https://github.com/nbd-wtf/nostr-tools).
+
+ ### Relay Considerations
+ - Store/propagate `kind: 1001` events per [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md).
+ - MAY limit storage but SHOULD retain tags.
+ - Private relays MAY enforce paywall controls.
+
+ ### Media Hosting
+ - Support [nostr.build](https://nostr.build/) uploads via API (requires API key; contact [nostr.build](https://nostr.build/) for access) or manual upload.
+ - Alternatives: IPFS, Arweave.
+ - Example (IPFS):
+   ```javascript
+   const { create } = require('ipfs-http-client');
+   const ipfs = create({ host: 'ipfs.infura.io', port: 5001, protocol: 'https' });
+   const file = await ipfs.add(fs.readFileSync('song.mp3'));
+   const fileUrl = `https://ipfs.io/ipfs/${file.cid}`;
+   ```
+
+ ### Payment Verification
+ - **Lightning**: Use [Alby SDK](https://docs.getalby.com/) or [lightningdevkit](https://github.com/ln-zap/lightningdevkit).
+ - **Bitcoin**: Use [Mempool.space](https://mempool.space/) API.
+ - Example:
+   ```javascript
+   const axios = require('axios');
+   async function verifyBitcoinPayment(address, txid) {
+     try {
+       const response = await axios.get(`https://mempool.space/api/tx/${txid}`);
+       return response.data.vout.some(output => output.scriptpubkey_address === address);
+     } catch (error) {
+       console.error('Verification failed:', error.message);
+       return false;
+     }
+   }
+   ```
+
+ ---
+
+ ## Security Considerations
+ - **Payment Fraud**: Validate LNURL responses and Bitcoin TXIDs; implement rate-limiting (e.g., 10 requests/minute) to prevent abuse.
+ - **Price Manipulation**: Display `price` verbatim; enforce payment.
+ - **Private Key Security**: Use [nsecBunker](https://nsecbunker.com/) or NIP-07 (e.g., [Nos2x](https://github.com/fiatjaf/nos2x)) for key management.
+ - **Media Privacy**: Use [nostr.build](https://nostr.build/) for metadata removal.
+ - **Access Control**: Encrypt paywalled `file` URLs and sensitive metadata (e.g., `license` terms) per [NIP-04](https://github.com/nostr-protocol/nips/blob/master/04.md).
+
+ ---
+
+ ## Backwards Compatibility
+ - Unknown `kind: 1001` events display as text notes (`content` field) per [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md).
+ - Clients ignoring `price`, `lightning`, or `bitcoin` tags treat content as free, ensuring seamless integration with existing Nostr clients.
+ - Compatible with [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md) and [NIP-21](https://github.com/nostr-protocol/nips/blob/master/21.md).
+
+ ---
+
+ ## Interoperability
+ - **Nostr Clients**: Render as music posts (e.g., [Primal](https://primal.net/), [Damus](https://damus.io/)). Encourage showcasing **₿Muse** events in these clients.
+ - **External Platforms**: Cross-post via [Bridgey Fed](https://bridgey.fed/).
+ - **Music Platforms**: Align with [Wavlake](https://wavlake.com/) metadata, avoiding `kind: 32123` conflicts. Collaboration with Wavlake is recommended to integrate NIP-102 natively.
+
+ ---
+
+ ## References
+ - [NIP-01: Basic Event Structure](https://github.com/nostr-protocol/nips/blob/master/01.md)
+ - [NIP-04: Encrypted Direct Messages](https://github.com/nostr-protocol/nips/blob/master/04.md)
+ - [NIP-21: LNURL](https://github.com/nostr-protocol/nips/blob/master/21.md)
+ - [NIP-99: Classified Listings](https://github.com/nostr-protocol/nips/blob/master/99.md)
+ - [BIP-173: Bitcoin Address Format](https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki)
+ - [nostr.build](https://nostr.build/)
+ - [Wavlake](https://wavlake.com/)
+ - [Nostr Protocol](https://nostr.com/)
+ - [Lightning Network](https://lightning.network/)
+ - [Creative Commons Licenses](https://creativecommons.org/)
+
+ ---
+
+ ## Copyright
+ Public domain.
+
+ ---
+
+ ## Acknowledgements
+ - [nostr.build](https://nostr.build/) for media hosting.
+ - [Wavlake](https://wavlake.com/) and [Stemstr](https://stemstr.app/) for inspiration.
+ - Nostr community for protocol development.
+
+ ---
+
+ ## Donations
+ Support the development of **₿Muse** by donating to the Ideator wallet:
+ ```
+ bc1qd0078kuvf0dtd5p6qzhtnn6rvqrqhrmpw8eqsr
+ ```
+
+ Donations are optional but greatly appreciated to fund ongoing improvements and community outreach for **₿Muse**.
